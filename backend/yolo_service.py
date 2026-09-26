@@ -2219,7 +2219,7 @@ class YOLOService:
     source=str(detection_path),
     conf=conf,
     iou=iou,
-    imgsz=640,
+    imgsz=320,
     device="cpu",
     verbose=False,
 )
