@@ -1225,39 +1225,14 @@ async def upload_sonar_image(
         )
 
     # --------------------------------------------------------
+# Run YOLO - TEMPORARILY BYPASSED FOR RENDER DIAGNOSTIC
+# --------------------------------------------------------
 
-    # Run YOLO
-
-    # --------------------------------------------------------
-
-    try:
-
-        yolo_result = (
-
-            yolo_service.run_inference(
-
-                str(detection_path)
-
-            )
-
-        )
-
-    except Exception as exc:
-
-        raise HTTPException(
-
-            status_code=500,
-
-            detail=(
-
-                "YOLO inference failed: "
-
-                f"{exc}"
-
-            ),
-
-        )
-
+    yolo_result = {
+    "detections": [],
+    "highestConfidence": 0,
+    "annotatedImageUrl": None,
+}
     # --------------------------------------------------------
 
     # Generate scan ID
