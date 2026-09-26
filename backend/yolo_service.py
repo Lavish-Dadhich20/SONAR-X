@@ -2216,20 +2216,13 @@ class YOLOService:
 
 
         results = self.model.predict(
-
-            source=str(
-
-                detection_path
-
-            ),
-
-            conf=conf,
-
-            iou=iou,
-
-            verbose=False,
-
-        )
+    source=str(detection_path),
+    conf=conf,
+    iou=iou,
+    imgsz=640,
+    device="cpu",
+    verbose=False,
+)
 
 
 
