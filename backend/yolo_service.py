@@ -22,7 +22,7 @@ from ultralytics import YOLO
 
 from config import settings
 
-
+import torch
 
 
 
@@ -2212,8 +2212,6 @@ class YOLOService:
             f"{detection_path}"
 
         )
-
-
 
         results = self.model.predict(
     source=str(detection_path),
