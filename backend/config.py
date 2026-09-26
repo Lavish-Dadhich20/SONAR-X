@@ -21,10 +21,7 @@ PROJECT_ROOT = BASE_DIR.parent
 UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-MODEL_FILE = PROJECT_ROOT / "best.pt"
-if not MODEL_FILE.exists():
-    # Fallback to backend directory if moved
-    MODEL_FILE = BASE_DIR / "best.pt"
+MODEL_FILE = BASE_DIR / "best.pt"
 
 class Settings(BaseModel):
     model_path: str = str(MODEL_FILE)
