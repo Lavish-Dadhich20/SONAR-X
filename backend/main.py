@@ -1,11 +1,12 @@
 import os
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import StreamingResponse
 
 from config import settings
+from database import db
 from routers import scans, detections, model, system, reports
 
 
@@ -37,17 +38,70 @@ app.add_middleware(
 
 
 # ============================================================
-# STATIC FILES
+# GRIDFS IMAGE STORAGE
 # ============================================================
 
-upload_dir = Path(settings.upload_dir)
-upload_dir.mkdir(parents=True, exist_ok=True)
+@app.get("/uploads/{file_path:path}")
+async def get_uploaded_file(file_path: str):
+    """
+    Serve uploaded/generated images directly from MongoDB GridFS.
 
-app.mount(
-    "/uploads",
-    StaticFiles(directory=str(upload_dir)),
-    name="uploads",
-)
+    The frontend can continue using URLs such as:
+
+        /uploads/example.png
+        /uploads/example_preview.png
+        /uploads/crops/crop_001.png
+    """
+
+    # Normalize the requested path.
+    relative_path = file_path.replace("\\", "/").lstrip("/")
+
+    if not relative_path:
+        raise HTTPException(
+            status_code=404,
+            detail="File not found.",
+        )
+
+    # --------------------------------------------------------
+    # First: exact relative-path lookup
+    # --------------------------------------------------------
+
+    grid_file = db.get_file_by_relative_path(
+        relative_path
+    )
+
+    # --------------------------------------------------------
+    # Second: filename fallback
+    #
+    # This keeps compatibility with older scan records
+    # whose URLs contain only the filename.
+    # --------------------------------------------------------
+
+    if grid_file is None:
+        filename = Path(relative_path).name
+
+        grid_file = db.get_file_by_filename(
+            filename
+        )
+
+    if grid_file is None:
+        raise HTTPException(
+            status_code=404,
+            detail="File not found in MongoDB GridFS.",
+        )
+
+    content_type = (
+        getattr(grid_file, "content_type", None)
+        or "application/octet-stream"
+    )
+
+    return StreamingResponse(
+        grid_file,
+        media_type=content_type,
+        headers={
+            "Cache-Control": "public, max-age=3600",
+        },
+    )
 
 
 # ============================================================
@@ -81,7 +135,11 @@ async def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "database": db.is_connected(),
+        "storage": "MongoDB GridFS",
+    }
 
 
 # ============================================================
