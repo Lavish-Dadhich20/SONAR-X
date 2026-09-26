@@ -2035,53 +2035,59 @@ export const ReportsPage: React.FC<
    * ---------------------------------------------------------
    */
 
-  const handleExportJSON =
-    () => {
-      if (!selectedReport) {
-        return;
+  const handleExportJSON = () => {
+  if (!selectedReport) {
+    alert("Please select a report first.");
+    return;
+  }
+
+  try {
+    const jsonData = JSON.stringify(
+      selectedReport,
+      null,
+      2
+    );
+
+    const blob = new Blob(
+      [jsonData],
+      {
+        type: "application/json",
       }
+    );
 
-      const blob =
-        new Blob(
-          [
-            JSON.stringify(
-              selectedReport,
-              null,
-              2
-            ),
-          ],
-          {
-            type: "application/json",
-          }
-        );
+    const downloadUrl =
+      URL.createObjectURL(blob);
 
-      const url =
-        URL.createObjectURL(
-          blob
-        );
+    const link =
+      document.createElement("a");
 
-      const anchor =
-        document.createElement(
-          "a"
-        );
+    link.href = downloadUrl;
 
-      anchor.href = url;
+    link.download =
+      `SONAR-X_Report_${selectedReport.reportId}.json`;
 
-      anchor.download =
-        `SONAR-X_Report_${selectedReport.reportId}.json`;
+    link.style.display = "none";
 
-      document.body.appendChild(
-        anchor
-      );
+    document.body.appendChild(link);
 
-      anchor.click();
+    link.click();
 
-      anchor.remove();
+    document.body.removeChild(link);
 
-      URL.revokeObjectURL(
-        url
-      );
-    };
+    window.setTimeout(() => {
+      URL.revokeObjectURL(downloadUrl);
+    }, 1000);
+  } catch (error) {
+    console.error(
+      "JSON export failed:",
+      error
+    );
+
+    alert(
+      "Failed to export the report as JSON."
+    );
+  }
+};
 
   /*
    * ---------------------------------------------------------
@@ -2230,18 +2236,14 @@ export const ReportsPage: React.FC<
                 {/* JSON */}
 
                 <button
-                  type="button"
-                  onClick={
-                    handleExportJSON
-                  }
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sonar-cyan text-sonar-bg hover:bg-cyan-400 font-bold transition shadow-sm"
-                >
-                  <Download className="w-3.5 h-3.5" />
-
-                  <span>
-                    Export JSON
-                  </span>
-                </button>
+  type="button"
+  onClick={handleExportJSON}
+  disabled={!selectedReport}
+  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sonar-cyan text-sonar-bg hover:bg-cyan-400 font-bold transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+>
+  <Download className="w-3.5 h-3.5" />
+  <span>Export JSON</span>
+</button>
 
               </div>
             </div>
