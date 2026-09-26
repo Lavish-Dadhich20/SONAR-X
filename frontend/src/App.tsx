@@ -1,6 +1,10 @@
+
 import React, { useState, useEffect } from "react";
+import { Menu, X } from "lucide-react";
+
 import { Sidebar } from "./components/layout/Sidebar";
 import { Header } from "./components/layout/Header";
+
 import { DashboardPage } from "./pages/DashboardPage";
 import { NewScanPage } from "./pages/NewScanPage";
 import { ScanHistoryPage } from "./pages/ScanHistoryPage";
@@ -8,15 +12,26 @@ import { DetectionsPage } from "./pages/DetectionsPage";
 import { SurveyMapPage } from "./pages/SurveyMapPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { SettingsPage } from "./pages/SettingsPage";
+
 import { SystemStatus } from "./types/sonar";
 import { api } from "./services/api";
+
 export function App() {
   const [activeTab, setActiveTab] =
     useState<string>("dashboard");
+
   const [systemStatus, setSystemStatus] =
     useState<SystemStatus | null>(null);
+
   const [selectedScanId, setSelectedScanId] =
     useState<string | null>(null);
+
+  /*
+   * Mobile sidebar state
+   */
+  const [mobileSidebarOpen, setMobileSidebarOpen] =
+    useState(false);
+
   /*
    * This value forces NewScanPage to completely
    * reset whenever "New Scan" is clicked.
@@ -26,22 +41,28 @@ export function App() {
    */
   const [newScanKey, setNewScanKey] =
     useState<number>(0);
+
   // ============================================================
   // SYSTEM STATUS
   // ============================================================
+
   useEffect(() => {
     fetchStatus();
+
     const interval = setInterval(
       fetchStatus,
       15000
     );
+
     return () =>
       clearInterval(interval);
   }, []);
+
   const fetchStatus = async () => {
     try {
       const status =
         await api.getSystemStatus();
+
       setSystemStatus(status);
     } catch {
       // Backend offline / starting up
@@ -69,14 +90,17 @@ export function App() {
       });
     }
   };
+
   // ============================================================
   // NEW SCAN
   // ============================================================
+
   const handleStartNewScan = () => {
     /*
      * Clear any previously selected scan.
      */
     setSelectedScanId(null);
+
     /*
      * Incrementing the key forces React to destroy
      * the existing NewScanPage and mount a completely
@@ -88,38 +112,47 @@ export function App() {
     setNewScanKey(
       (previous) => previous + 1
     );
+
     /*
      * Navigate to the New Scan workspace.
      */
     setActiveTab("new-scan");
   };
+
   // ============================================================
   // OPEN EXISTING SCAN
   // ============================================================
+
   const handleSelectScanForWorkspace = (
     scanId: string
   ) => {
     setSelectedScanId(scanId);
+
     /*
      * Do not increment newScanKey here because
      * we WANT to load the selected existing scan.
      */
     setActiveTab("new-scan");
   };
+
   // ============================================================
   // REPORTS
   // ============================================================
+
   const handleNavigateToReport = (
     scanId?: string
   ) => {
     if (scanId) {
       setSelectedScanId(scanId);
     }
+
     setActiveTab("reports");
   };
+
   // ============================================================
   // HEADER INFORMATION
   // ============================================================
+
   const getHeaderInfo = () => {
     switch (activeTab) {
       case "dashboard":
@@ -128,48 +161,56 @@ export function App() {
           subtitle:
             "Overview of your sonar analysis activity.",
         };
+
       case "new-scan":
         return {
           title: "New Sonar Scan",
           subtitle:
             "Upload a sonar image to detect and analyze underwater objects.",
         };
+
       case "history":
         return {
           title: "Scan History",
           subtitle:
             "Historical repository of analyzed sonar scans and inferences.",
         };
+
       case "detections":
         return {
           title: "Detection Database",
           subtitle:
             "Granular acoustic target detections and localized bounding boxes.",
         };
+
       case "map":
         return {
           title: "Survey Map",
           subtitle:
             "Geospatial telemetry of genuine geo-tagged sonar passes.",
         };
+
       case "reports":
         return {
           title: "Analysis Reports",
           subtitle:
             "Structured sonar analysis and analysis documentation.",
         };
+
       case "model":
         return {
           title: "Model Performance",
           subtitle:
             "Acoustic detection benchmarks and per-class precision metrics.",
         };
+
       case "settings":
         return {
           title: "Settings",
           subtitle:
             "Acoustic sensitivity, AI providers, and system telemetry.",
         };
+
       default:
         return {
           title: "SONAR-X",
@@ -178,28 +219,101 @@ export function App() {
         };
     }
   };
+
   const headerInfo =
     getHeaderInfo();
+
   // ============================================================
   // RENDER
   // ============================================================
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-sonar-bg text-sonar-text">
+
       {/* ======================================================
-          SIDEBAR
+          DESKTOP SIDEBAR
           ====================================================== */}
-      <Sidebar
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        systemStatus={systemStatus}
-      />
+
+      <div className="hidden md:flex">
+        <Sidebar
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          systemStatus={systemStatus}
+        />
+      </div>
+
+      {/* ======================================================
+          MOBILE HAMBURGER
+          ====================================================== */}
+
+      <button
+        onClick={() =>
+          setMobileSidebarOpen(true)
+        }
+        className="md:hidden fixed top-4 left-4 z-40 p-2 rounded-lg bg-sonar-card border border-sonar-border text-sonar-cyan shadow-lg"
+        aria-label="Open navigation"
+      >
+        <Menu className="w-5 h-5" />
+      </button>
+
+      {/* ======================================================
+          MOBILE SIDEBAR OVERLAY
+          ====================================================== */}
+
+      {mobileSidebarOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-40 bg-black/50"
+          onClick={() =>
+            setMobileSidebarOpen(false)
+          }
+        />
+      )}
+
+      {/* ======================================================
+          MOBILE SIDEBAR
+          ====================================================== */}
+
+      {mobileSidebarOpen && (
+        <div className="md:hidden fixed inset-y-0 left-0 z-50">
+
+          <div className="relative h-full">
+
+            <Sidebar
+              activeTab={activeTab}
+              setActiveTab={(tab) => {
+                setActiveTab(tab);
+                setMobileSidebarOpen(false);
+              }}
+              systemStatus={systemStatus}
+            />
+
+            {/* Close Button */}
+
+            <button
+              onClick={() =>
+                setMobileSidebarOpen(false)
+              }
+              className="absolute top-4 right-3 p-2 rounded-lg bg-sonar-card border border-sonar-border text-sonar-muted hover:text-white"
+              aria-label="Close navigation"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+          </div>
+
+        </div>
+      )}
+
       {/* ======================================================
           MAIN CONTENT
           ====================================================== */}
+
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
+
         {/* ====================================================
             HEADER
             ==================================================== */}
+
         <Header
           title={headerInfo.title}
           subtitle={headerInfo.subtitle}
@@ -209,13 +323,17 @@ export function App() {
           }
           systemStatus={systemStatus}
         />
+
         {/* ====================================================
             PAGE CONTENT
             ==================================================== */}
+
         <main className="flex-1 overflow-y-auto bg-sonar-bg">
+
           {/* ==================================================
               DASHBOARD
               ================================================== */}
+
           {activeTab === "dashboard" && (
             <DashboardPage
               onNavigateToNewScan={
@@ -232,12 +350,14 @@ export function App() {
               }
             />
           )}
+
           {/* ==================================================
               NEW SCAN
               IMPORTANT:
               The key forces a complete reset when
               "New Scan" is clicked.
               ================================================== */}
+
           {activeTab === "new-scan" && (
             <NewScanPage
               key={newScanKey}
@@ -252,9 +372,11 @@ export function App() {
               }
             />
           )}
+
           {/* ==================================================
               SCAN HISTORY
               ================================================== */}
+
           {activeTab === "history" && (
             <ScanHistoryPage
               onViewScan={
@@ -268,9 +390,11 @@ export function App() {
               }
             />
           )}
+
           {/* ==================================================
               DETECTIONS
               ================================================== */}
+
           {activeTab === "detections" && (
             <DetectionsPage
               onSelectScan={
@@ -281,9 +405,11 @@ export function App() {
               }
             />
           )}
+
           {/* ==================================================
               SURVEY MAP
               ================================================== */}
+
           {activeTab === "map" && (
             <SurveyMapPage
               onSelectScan={
@@ -294,9 +420,11 @@ export function App() {
               }
             />
           )}
+
           {/* ==================================================
               REPORTS
               ================================================== */}
+
           {activeTab === "reports" && (
             <ReportsPage
               initialScanId={
@@ -307,9 +435,11 @@ export function App() {
               }
             />
           )}
+
           {/* ==================================================
               SETTINGS
               ================================================== */}
+
           {activeTab === "settings" && (
             <SettingsPage
               systemStatus={
@@ -320,9 +450,13 @@ export function App() {
               }
             />
           )}
+
         </main>
+
       </div>
+
     </div>
   );
 }
+
 export default App;
