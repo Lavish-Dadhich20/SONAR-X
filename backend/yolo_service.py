@@ -1682,7 +1682,7 @@ class YOLOService:
 
             path.parent
 
-            / f"{path.stem}_preview\.png"
+            / f"{path.stem}_preview.png"
 
         )
 
