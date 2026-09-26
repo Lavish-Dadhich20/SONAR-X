@@ -56,6 +56,31 @@ def store_gridfs_file(path: Path, scan_id: str, role: str) -> Optional[str]:
     if not path.exists() or path.stat().st_size <= 0:
         return None
     return db.save_file_from_path(str(path), filename=path.name, content_type=_content_type_for_path(path), relative_path=path.name, metadata={"scanId": scan_id, "role": role})
+def store_gridfs_crop(crop_url: Optional[str], scan_id: str) -> Optional[str]:
+    print("[GridFS Crop] crop_url =", crop_url)
+    if not crop_url:
+        print("[GridFS Crop] crop_url is empty")
+        return None
+    crop_name = Path(str(crop_url).split("?", 1)[0]).name
+    print("[GridFS Crop] crop_name =", crop_name)
+    if not crop_name:
+        print("[GridFS Crop] crop_name is empty")
+        return None
+    crop_path = Path(settings.upload_dir) / "crops" / crop_name
+    print("[GridFS Crop] crop_path =", crop_path)
+    print("[GridFS Crop] exists =", crop_path.exists())
+    if not crop_path.exists() or crop_path.stat().st_size <= 0:
+        print("[GridFS Crop] crop file missing or empty")
+        return None
+    file_id = db.save_file_from_path(
+        str(crop_path),
+        filename=crop_name,
+        content_type=_content_type_for_path(crop_path),
+        relative_path=f"crops/{crop_name}",
+        metadata={"scanId": scan_id, "role": "crop"},
+    )
+    print("[GridFS Crop] SAVED =", file_id)
+    return file_id
 def restore_scan_file(scan: Dict[str, Any], work_dir: Path) -> Path:
     saved_filename = scan.get("savedFilename")
     if not saved_filename:
@@ -648,29 +673,50 @@ async def upload_sonar_image(
         "saved": True,
     }
     # --------------------------------------------------------
-    # Persist original, display/preview, and annotated files in MongoDB GridFS.
+    # Persist original, display/preview, annotated files, and detection crops in MongoDB GridFS.
     # The local files are only temporary processing artifacts.
     try:
-        original_file_id = store_gridfs_file(file_path, scan_id, "original")
-        display_file_id = store_gridfs_file(Path(display_path), scan_id, "display")
+        original_file_id = store_gridfs_file(
+            file_path,
+            scan_id,
+            "original",
+        )
+        display_file_id = store_gridfs_file(
+            Path(display_path),
+            scan_id,
+            "display",
+        )
         annotated_file_id = None
         if annotated_image_url:
-            annotated_name = Path(str(annotated_image_url).split("?", 1)[0]).name
+            annotated_name = Path(
+                str(annotated_image_url).split("?", 1)[0]
+            ).name
             annotated_path = upload_dir / annotated_name
-            annotated_file_id = store_gridfs_file(annotated_path, scan_id, "annotated")
+            annotated_file_id = store_gridfs_file(
+                annotated_path,
+                scan_id,
+                "annotated",
+            )
+        crop_file_ids = []
+        for detection in detections:
+            crop_url = detection.get("cropUrl")
+            crop_file_id = store_gridfs_crop(
+                crop_url,
+                scan_id,
+            )
+            if crop_file_id:
+                detection["cropFileId"] = crop_file_id
+                crop_file_ids.append(crop_file_id)
         scan_record["storage"] = {
             "provider": "mongodb-gridfs",
             "originalFileId": original_file_id,
             "displayFileId": display_file_id,
             "annotatedFileId": annotated_file_id,
+            "cropFileIds": crop_file_ids,
         }
-        db.insert_scan(
-            scan_record
-        )
+        db.insert_scan(scan_record)
         if detections:
-            db.insert_detections(
-                detections
-            )
+            db.insert_detections(detections)
     except Exception as exc:
         raise HTTPException(
             status_code=500,
@@ -1121,13 +1167,28 @@ async def delete_scan(
     # --------------------------------------------------------
     # Best-effort GridFS + local cleanup
     storage = scan.get("storage") or {}
-    for key in ("originalFileId", "displayFileId", "annotatedFileId"):
+    for key in (
+        "originalFileId",
+        "displayFileId",
+        "annotatedFileId",
+    ):
         file_id = storage.get(key)
         if file_id:
             try:
                 db.delete_file(file_id)
             except Exception as exc:
-                print(f"[Scans] Warning: could not delete GridFS file {file_id}: {exc}")
+                print(
+                    f"[Scans] Warning: could not delete GridFS file "
+                    f"{file_id}: {exc}"
+                )
+    for crop_file_id in storage.get("cropFileIds", []):
+        try:
+            db.delete_file(crop_file_id)
+        except Exception as exc:
+            print(
+                f"[Scans] Warning: could not delete crop GridFS file "
+                f"{crop_file_id}: {exc}"
+            )
     saved_filename = scan.get("savedFilename")
     if saved_filename:
         original_file = Path(settings.upload_dir) / saved_filename

@@ -402,7 +402,7 @@ export const SonarImageViewer: React.FC<SonarImageViewerProps> = ({
             alt={filename}
             draggable={false}
             onError={handleImageError}
-            className="max-h-[540px] max-w-full object-contain block shadow-2xl rounded border border-sonar-border/60 pointer-events-auto"
+            className="w-auto min-w-[520px] max-w-[900px] max-h-[540px] h-auto object-contain block shadow-2xl rounded border border-sonar-border/60 pointer-events-auto"
           />
 
           {/* =================================================

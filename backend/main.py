@@ -2,12 +2,13 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse,FileResponse
 
 from config import settings
 from database import db
 from routers import scans, detections, model, system, reports
 
+import mimetypes
 
 app = FastAPI(
     title="SONAR-X API",
@@ -41,16 +42,45 @@ app.add_middleware(
 # ============================================================
 
 @app.get("/uploads/{file_path:path}")
-async def get_uploaded_file(file_path: str):
-    """
-    Serve uploaded/generated images directly from MongoDB GridFS.
-
-    The frontend can continue using URLs such as:
-
-        /uploads/example.png
-        /uploads/example_preview.png
-        /uploads/crops/crop_001.png
-    """
+async def serve_uploaded_file(file_path: str):
+    normalized_path = str(file_path).replace("\\", "/").lstrip("/")
+    filename = Path(normalized_path).name
+    if not filename:
+        raise HTTPException(status_code=404, detail="File not found")
+    grid_file = None
+    try:
+        grid_file = db.get_file_by_relative_path(normalized_path)
+    except Exception as exc:
+        print(f"[GridFS] Relative-path lookup failed for '{normalized_path}': {exc}")
+    if grid_file is None:
+        try:
+            grid_file = db.get_file_by_filename(filename)
+        except Exception as exc:
+            print(f"[GridFS] Filename lookup failed for '{filename}': {exc}")
+    if grid_file is None:
+        local_path = Path(settings.upload_dir) / normalized_path
+        if local_path.exists() and local_path.is_file():
+            media_type = mimetypes.guess_type(local_path.name)[0] or "application/octet-stream"
+            return FileResponse(
+                str(local_path),
+                media_type=media_type,
+                filename=local_path.name,
+            )
+        raise HTTPException(
+            status_code=404,
+            detail=f"Uploaded file '{normalized_path}' was not found",
+        )
+    media_type = getattr(grid_file, "content_type", None)
+    if not media_type:
+        media_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    return StreamingResponse(
+        grid_file,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'inline; filename="{filename}"',
+            "Cache-Control": "public, max-age=31536000, immutable",
+        },
+    )
 
     # Normalize the requested path.
     relative_path = file_path.replace("\\", "/").lstrip("/")
