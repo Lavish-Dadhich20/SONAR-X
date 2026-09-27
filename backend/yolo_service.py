@@ -21,8 +21,8 @@ class YOLOService:
         self.input_name: Optional[str] = None
         self.output_name: Optional[str] = None
 
-        self.input_width = 320
-        self.input_height = 320
+        self.input_width = 640
+        self.input_height = 640
 
         self.classes: Dict[int, str] = {
             0: "submarine_pipeline",
@@ -831,7 +831,7 @@ class YOLOService:
     def _letterbox(
         self,
         image: np.ndarray,
-        new_size: Tuple[int, int] = (320, 320)
+        new_size: Tuple[int, int] = (640, 640)
     ) -> Tuple[
         np.ndarray,
         float,
@@ -1083,9 +1083,11 @@ class YOLOService:
         # TRANSPOSE IF NEEDED
         # =========================================================
 
+        expected_channels = 4 + len(self.classes)
+
         if (
-            raw.shape[0] == 6
-            and raw.shape[1] != 6
+            raw.shape[0] == expected_channels
+            and raw.shape[1] != expected_channels
         ):
 
             raw = raw.T

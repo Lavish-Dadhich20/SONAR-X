@@ -28,7 +28,7 @@ class AIService:
 
         self.gemini_model = os.getenv(
             "GEMINI_MODEL",
-            "gemini-3.6-flash",
+            "gemini-3.8-flash",
         )
 
         self.groq_vision_model = os.getenv(
@@ -658,6 +658,7 @@ Return valid JSON only.
                 ],
                 generation_config={
                     "temperature": 0.2,
+                    "response_mime_type": "application/json",
                 },
             )
 

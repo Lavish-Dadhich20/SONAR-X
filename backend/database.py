@@ -39,8 +39,8 @@ class DatabaseManager:
         try:
             self.client = pymongo.MongoClient(
                 settings.mongodb_uri,
-                serverSelectionTimeoutMS=2500,
-                connectTimeoutMS=2500,
+                serverSelectionTimeoutMS=10000,
+                connectTimeoutMS=10000,
             )
 
             self.client.admin.command("ping")
