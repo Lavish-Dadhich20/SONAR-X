@@ -30,7 +30,7 @@ const MAPBOX_TOKEN =
   import.meta.env.VITE_MAPBOX_TOKEN;
 
 const API_BASE =
-  "http://localhost:8000";
+  "https://sonar-x.onrender.com";
 
 /*
  * ============================================================
