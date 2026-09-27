@@ -293,53 +293,129 @@ def attach_detection_geolocations(
     original_path: Path,
     geospatial: Optional[Dict[str, Any]],
     is_geotiff: bool,
+    image_metadata: Optional[Dict[str, Any]] = None,
 ) -> list:
     """Attach object-level geographic coordinates to YOLO detections."""
-    if not (
+
+    # --------------------------------------------------------
+    # GeoTIFF: calculate exact location from detection pixel
+    # --------------------------------------------------------
+    if (
         is_geotiff
         and geospatial
         and geospatial.get("hasGeodata")
     ):
-        return detections
-    original_width = int(geospatial.get("width", 0))
-    original_height = int(geospatial.get("height", 0))
-    if original_width <= 0 or original_height <= 0:
-        print(
-            "[GeoTIFF] Cannot geolocate detections: "
-            "invalid original dimensions."
+        original_width = int(
+            geospatial.get("width", 0)
         )
+        original_height = int(
+            geospatial.get("height", 0)
+        )
+
+        if original_width <= 0 or original_height <= 0:
+            print(
+                "[GeoTIFF] Cannot geolocate detections: "
+                "invalid original dimensions."
+            )
+            return detections
+
+        for detection_index, detection in enumerate(
+            detections,
+            start=1,
+        ):
+            try:
+                bounding_box = (
+                    detection.get("boundingBox") or {}
+                )
+
+                normalized_x = float(
+                    bounding_box.get("x", 0)
+                )
+                normalized_y = float(
+                    bounding_box.get("y", 0)
+                )
+                normalized_w = float(
+                    bounding_box.get("w", 0)
+                )
+                normalized_h = float(
+                    bounding_box.get("h", 0)
+                )
+
+                center_normalized_x = (
+                    normalized_x
+                    + (normalized_w / 2.0)
+                )
+                center_normalized_y = (
+                    normalized_y
+                    + (normalized_h / 2.0)
+                )
+
+                center_pixel_x = (
+                    center_normalized_x
+                    * original_width
+                )
+                center_pixel_y = (
+                    center_normalized_y
+                    * original_height
+                )
+
+                geo_location = (
+                    yolo_service.pixel_to_geographic(
+                        str(original_path),
+                        center_pixel_x,
+                        center_pixel_y,
+                    )
+                )
+
+                detection["geoLocation"] = geo_location
+
+                print(
+                    "[GeoTIFF] Detection "
+                    f"{detection_index} "
+                    f"({detection.get('className', 'unknown')}) "
+                    f"center pixel=({center_pixel_x:.2f}, "
+                    f"{center_pixel_y:.2f}) "
+                    f"geo={geo_location}"
+                )
+
+            except Exception as exc:
+                detection["geoLocation"] = None
+                print(
+                    "[GeoTIFF] Detection "
+                    f"{detection_index} geolocation failed: {exc}"
+                )
+
         return detections
-    for detection_index, detection in enumerate(detections, start=1):
-        try:
-            bounding_box = detection.get("boundingBox") or {}
-            normalized_x = float(bounding_box.get("x", 0))
-            normalized_y = float(bounding_box.get("y", 0))
-            normalized_w = float(bounding_box.get("w", 0))
-            normalized_h = float(bounding_box.get("h", 0))
-            center_normalized_x = normalized_x + (normalized_w / 2.0)
-            center_normalized_y = normalized_y + (normalized_h / 2.0)
-            center_pixel_x = center_normalized_x * original_width
-            center_pixel_y = center_normalized_y * original_height
-            geo_location = yolo_service.pixel_to_geographic(
-                str(original_path),
-                center_pixel_x,
-                center_pixel_y,
-            )
-            detection["geoLocation"] = geo_location
+
+    # --------------------------------------------------------
+    # PNG/JPG/JPEG: use embedded image GPS metadata
+    # --------------------------------------------------------
+    gps = (
+        image_metadata.get("gps")
+        if image_metadata
+        else None
+    )
+
+    if gps:
+        latitude = gps.get("latitude")
+        longitude = gps.get("longitude")
+
+        if (
+            latitude is not None
+            and longitude is not None
+        ):
+            for detection in detections:
+                detection["geoLocation"] = {
+                    "latitude": float(latitude),
+                    "longitude": float(longitude),
+                }
+
             print(
-                "[GeoTIFF] Detection "
-                f"{detection_index} "
-                f"({detection.get('className', 'unknown')}) "
-                f"center pixel=({center_pixel_x:.2f}, "
-                f"{center_pixel_y:.2f}) "
-                f"geo={geo_location}"
+                "[Image GPS] Attached GPS to "
+                f"{len(detections)} detections: "
+                f"lat={latitude}, lon={longitude}"
             )
-        except Exception as exc:
-            detection["geoLocation"] = None
-            print(
-                "[GeoTIFF] Detection "
-                f"{detection_index} geolocation failed: {exc}"
-            )
+
     return detections
 def update_scan_record(
     scan_id: str,
@@ -441,13 +517,26 @@ async def upload_sonar_image(
     # --------------------------------------------------------
     # Prepare image
     # --------------------------------------------------------
+
+    # --------------------------------------------------------
+    # Prepare image
+    # --------------------------------------------------------
     try:
-        detection_path, geospatial, is_geotiff = (
+        display_path, geospatial, is_geotiff = (
             prepare_scan_image(
                 file_path,
                 upload_dir,
             )
         )
+
+        # For GeoTIFF:
+        # - YOLO uses the original TIFF
+        # - Browser uses the PNG preview
+        if is_geotiff:
+            detection_path = file_path
+        else:
+            detection_path = display_path
+
         prepared = {
             "isGeoTIFF": is_geotiff,
             "geospatial": geospatial,
@@ -455,9 +544,10 @@ async def upload_sonar_image(
                 detection_path
             ),
             "displayPath": str(
-                detection_path
+                display_path
             ),
         }
+
     except Exception as exc:
         raise HTTPException(
             status_code=500,
@@ -572,11 +662,12 @@ async def upload_sonar_image(
         [],
     )
     raw_detections = attach_detection_geolocations(
-        detections=raw_detections,
-        original_path=file_path,
-        geospatial=geospatial,
-        is_geotiff=is_geotiff,
-    )
+    detections=raw_detections,
+    original_path=file_path,
+    geospatial=geospatial,
+    is_geotiff=is_geotiff,
+    image_metadata=metadata,
+)
     for detection_index, detection in enumerate(
         raw_detections,
         start=1,
