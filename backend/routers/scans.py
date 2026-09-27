@@ -1155,6 +1155,23 @@ async def interpret_scan(
             status_code=500,
             detail=f"Failed to save AI analysis: {exc}",
         )
+
+    # Save a dedicated AI-analysis record so dashboard statistics
+    # can count completed analyses independently of scan records.
+    try:
+        db.insert_ai_analysis({
+            "scanId": scan_id,
+            "aiProvider": provider_name,
+            "analysis": interpretation,
+            "createdAt": datetime.utcnow().isoformat(),
+            "updatedAt": datetime.utcnow().isoformat(),
+        })
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to save AI analysis record: {exc}",
+        )
+
     return {
         "scanId": scan_id,
         "aiProvider": provider_name,
